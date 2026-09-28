@@ -153,20 +153,33 @@ class HomesteadMenu:
                 "back",
             ]
         elif area == "farm":
-            options = ["water crops", "harvest (when mature)", "crop profile", "look", "back"]
-        elif area == "livestock":
             options = [
-                "feed animals",
-                "collect eggs/milk",
-                "barn profile",
+                "select plot slot (1-3)",
+                "cycle crop species",
+                "plant in active slot",
+                "water crops",
+                "fertilize (compost)",
+                "harvest active slot",
                 "look",
                 "back",
             ]
-        elif area == "bonsai":
-            if self.homestead.is_mature("bonsai"):
-                options = ["water", "prune", "harvest bonsai (new gen)", "look", "back"]
-            else:
-                options = ["water", "prune", "look", "back"]
+            subtitle = entity.journal_line()[: max(0, self.maxx - 4)]
+        elif area == "livestock":
+            sp = entity.species_name()
+            options = [
+                "cycle animal (4 types)",
+                entity.primary_care_for_species() + " (primary care)",
+                "feed",
+                "collect eggs/milk",
+                "ride / training (horse)",
+                "shear wool (llama)",
+                "look",
+                "back",
+            ]
+            if sp == "horse":
+                options[2] = "feed (extra)"
+            elif sp == "llama":
+                options[3] = "collect (n/a for llama)"
         else:
             options = ["back"]
         self._draw_options(options, 4, subtitle)
@@ -259,6 +272,18 @@ class HomesteadMenu:
             lines.append(f"tank health: {entity.tank_health}%")
         if hasattr(entity, "produce_collected"):
             lines.append(f"produce collected: {entity.produce_collected}")
+        if hasattr(entity, "journal_line"):
+            lines.append(entity.journal_line())
+        if hasattr(entity, "slots"):
+            for i, slot in enumerate(entity.slots):
+                if slot.planted:
+                    sp = entity.species_list[slot.species]
+                    st = entity.stage_list[slot.stage]
+                    lines.append(f"plot {i + 1}: {st} {sp}")
+                else:
+                    lines.append(f"plot {i + 1}: empty")
+        if hasattr(entity, "training_sessions"):
+            lines.append(f"training sessions: {entity.training_sessions}")
         y = 14
         for line in lines:
             if y >= self.maxy - 1:
@@ -324,12 +349,25 @@ class HomesteadMenu:
                 return ["water", "prune", "harvest bonsai (new gen)", "look", "back"]
             return ["water", "prune", "look", "back"]
         if self.homestead.active_area == "farm":
-            return ["water crops", "harvest (when mature)", "crop profile", "look", "back"]
-        if self.homestead.active_area == "livestock":
             return [
-                "feed animals",
+                "select plot slot (1-3)",
+                "cycle crop species",
+                "plant in active slot",
+                "water crops",
+                "fertilize (compost)",
+                "harvest active slot",
+                "look",
+                "back",
+            ]
+        if self.homestead.active_area == "livestock":
+            entity = self.homestead.livestock
+            return [
+                "cycle animal (4 types)",
+                entity.primary_care_for_species() + " (primary care)",
+                "feed",
                 "collect eggs/milk",
-                "barn profile",
+                "ride / training (horse)",
+                "shear wool (llama)",
                 "look",
                 "back",
             ]
@@ -415,32 +453,92 @@ class HomesteadMenu:
                 self._flash_message("Need adult fish + healthy tank to spawn.")
             self._persist()
             return
-        if choice == "harvest (when mature)" and area == "farm":
-            if entity.try_harvest() and self._confirm_harvest("farm"):
-                self.homestead.harvest_entity("farm", self.data)
-                self._flash_message("Harvested! Next generation planted.")
-            else:
-                self._flash_message("Crops must reach harvest stage first.")
-            self._persist()
-            return
-        if choice == "collect eggs/milk" and area == "livestock":
-            bonus = entity.collect_produce()
-            if bonus:
-                self._flash_message(f"Collected produce (+{bonus} ticks)!")
-            else:
-                self._flash_message("Feed fresh + grown animals to collect.")
-            self._persist()
-            return
+        if area == "farm":
+            if choice == "select plot slot (1-3)":
+                entity.select_slot((entity.active_slot + 1) % entity.NUM_SLOTS)
+                self._flash_message(f"Active plot: slot {entity.active_slot + 1}")
+                self._persist()
+                return
+            if choice == "cycle crop species":
+                entity.species = (entity.species + 1) % len(entity.species_list)
+                self._flash_message(
+                    f"Seed choice: {entity.species_list[entity.species]}"
+                )
+                self._persist()
+                return
+            if choice == "plant in active slot":
+                if entity.plant_crop(entity.species):
+                    self._flash_message("Planted in active slot!")
+                else:
+                    self._flash_message("Slot must be empty to plant.")
+                self._persist()
+                return
+            if choice == "fertilize (compost)":
+                if entity.try_fertilize():
+                    self._flash_message("Soil nourished with compost!")
+                else:
+                    self._flash_message("Need compost (harvest streak / livestock).")
+                self._persist()
+                return
+            if choice == "harvest active slot":
+                if self.homestead.harvest_entity("farm"):
+                    self._flash_message("Harvested! Plant a new crop for rotation bonus.")
+                else:
+                    self._flash_message("Active slot must reach harvest stage.")
+                self._persist()
+                return
+
+        if area == "livestock":
+            if choice == "cycle animal (4 types)":
+                entity.species = (entity.species + 1) % len(entity.species_list)
+                self._flash_message(f"Now tending: {entity.species_name()}")
+                self.selected = 0
+                self._persist()
+                return
+            if choice == "ride / training (horse)":
+                bonus = entity.ride_training()
+                if bonus:
+                    self._flash_message(f"Training ride (+{bonus} ticks)!")
+                else:
+                    self._flash_message("Grown horse + fresh groom/feed to ride.")
+                self._persist()
+                return
+            if choice == "shear wool (llama)":
+                bonus = entity.shear_wool()
+                if bonus:
+                    self.homestead.grant_farm_compost(1)
+                    self._flash_message(f"Sheared wool (+{bonus} ticks, +compost)!")
+                else:
+                    self._flash_message("Grown llama + fresh feed to shear.")
+                self._persist()
+                return
+            if choice == "collect eggs/milk" or choice == "collect (n/a for llama)":
+                bonus = entity.collect_produce()
+                if bonus:
+                    self.homestead.grant_farm_compost(1)
+                    self._flash_message(f"Collected produce (+{bonus} ticks, +compost)!")
+                else:
+                    self._flash_message("Chicken/cow: feed fresh + grown to collect.")
+                self._persist()
+                return
 
         verb_map = {
             "feed": "feed",
             "feed animals": "feed",
+            "feed (extra)": "feed",
+            "groom (primary care)": "groom",
             "clean tank": "clean",
             "check water": "check_water",
             "water": "water",
             "water crops": "water",
             "prune": "prune",
         }
+        if choice.endswith("(primary care)"):
+            verb = entity.primary_care_for_species()
+            if entity:
+                entity.perform_care(verb)
+                self._persist()
+            return
         verb = verb_map.get(choice)
         if verb and entity:
             entity.perform_care(verb)
@@ -568,11 +666,13 @@ class HomesteadMenu:
             self.screen.addstr(2, 2, "Fish profile — choose species & look", curses.A_BOLD)
             sp = fish.species_list[species_idx]
             var = FISH_COLOR_VARIANTS[variant_idx]
+            flavor = FishTank.fish_flavor(sp)
             self.screen.addstr(4, 4, f"species [{species_idx + 1}/{len(fish.species_list)}]: {sp}")
-            self.screen.addstr(5, 4, f"color variant: {var}")
-            self.screen.addstr(6, 4, f"name (optional): {''.join(name_buf) or '(none)'}")
+            self.screen.addstr(5, 4, flavor[: max(0, self.maxx - 8)], curses.A_DIM)
+            self.screen.addstr(6, 4, f"color variant: {var}")
+            self.screen.addstr(7, 4, f"name (optional): {''.join(name_buf) or '(none)'}")
             self.screen.addstr(
-                8,
+                9,
                 4,
                 "←/→ species  ↑/↓ variant  type name  Enter save  q cancel",
                 curses.A_DIM,
@@ -711,11 +811,11 @@ class HomesteadMenu:
         lines = [
             "Aquafarm: daily homestead care (24h windows).",
             "Feed fish, clean tank, check water — algae slows growth slightly.",
-            "Water crops; harvest at maturity for a new generation.",
-            "Feed livestock (horses, sheep, pigs & more); collect when grown.",
-            "Crop & barn profiles: pick species before you tend.",
-            "Visit friends to help their homestead (shared hosts).",
-            "Environment menu: tank theme + retro farm backdrop.",
+            "Farm: 3 plots, soil quality, seasons, compost & rotation.",
+            "Water crops; fertilize; harvest slots; plant new species.",
+            "Livestock: chicken, cow, horse (groom/ride), llama (shear).",
+            "Collect/shear/ride for bonus ticks; compost feeds the farm.",
+            "Environment menu: tank theme + homestead backdrop.",
             "Neglect primary care 5 days and a friend may pass on.",
             "Press any key to return...",
         ]

@@ -1,8 +1,8 @@
 import threading
 import time
 
-from entities import BonsaiTree, FarmPlot, FishTank, LivestockPen
-from homestead_config import HOMESTEAD_BACKDROPS, TANK_THEMES
+from entities import BonsaiTree, FarmField, FishTank, LivestockPen
+from homestead_config import SEASON_ADVANCE_EVERY_LOGIN_DAYS
 
 
 class Homestead:
@@ -12,7 +12,7 @@ class Homestead:
         self.generation = generation
         self.aquarium = FishTank(generation=generation)
         self.bonsai = BonsaiTree(generation=generation)
-        self.farm = FarmPlot(generation=generation)
+        self.farm = FarmField(generation=generation)
         self.livestock = LivestockPen(generation=generation)
         self.active_area = "homestead"
         self.tank_theme_index = 0
@@ -23,8 +23,28 @@ class Homestead:
         self.visitors = []
         self._life_thread = None
         self._entity_was_dead = {}
+        self.login_day_stamp = self._today_stamp()
+        self.login_days_logged = 1
+
+    @staticmethod
+    def _today_stamp():
+        return int(time.time()) // 86400
 
     def migrate_properties(self):
+        from entities.farm import FarmField as FF
+
+        if type(self.farm).__name__ == "FarmPlot" and not hasattr(self.farm, "slots"):
+            old = self.farm
+            self.farm = FF(generation=old.generation, species=old.species)
+            self.farm.stage = getattr(old, "stage", 0)
+            self.farm.ticks = getattr(old, "ticks", 0)
+            self.farm.dead = getattr(old, "dead", False)
+            if self.farm.stage > 0 or self.farm.ticks > 0:
+                self.farm.slots[0].stage = min(
+                    self.farm.stage, len(self.farm.stage_list) - 1
+                )
+                self.farm.slots[0].ticks = self.farm.ticks
+                self.farm.slots[0].planted = True
         for entity in self.all_entities():
             entity.migrate_properties()
         if not hasattr(self, "active_area"):
@@ -43,14 +63,31 @@ class Homestead:
             self.visitors = []
         if not hasattr(self, "_entity_was_dead"):
             self._entity_was_dead = {}
+        if not hasattr(self, "login_day_stamp"):
+            self.login_day_stamp = self._today_stamp()
+        if not hasattr(self, "login_days_logged"):
+            self.login_days_logged = 1
         self._life_thread = None
         self._sync_death_tracking()
 
+    def note_login_day(self):
+        today = self._today_stamp()
+        if today > self.login_day_stamp:
+            self.login_days_logged += 1
+            self.login_day_stamp = today
+            if self.login_days_logged % SEASON_ADVANCE_EVERY_LOGIN_DAYS == 0:
+                if hasattr(self.farm, "advance_season"):
+                    self.farm.advance_season()
+
     def tank_theme(self):
+        from homestead_config import TANK_THEMES
+
         idx = max(0, min(self.tank_theme_index, len(TANK_THEMES) - 1))
         return TANK_THEMES[idx]
 
     def backdrop(self):
+        from homestead_config import HOMESTEAD_BACKDROPS
+
         idx = max(0, min(self.backdrop_index, len(HOMESTEAD_BACKDROPS) - 1))
         return HOMESTEAD_BACKDROPS[idx]
 
@@ -65,6 +102,7 @@ class Homestead:
             "total_score": self.total_score(),
             "tank_theme": self.tank_theme()["id"],
             "homestead_backdrop": self.backdrop()["id"],
+            "login_days_logged": self.login_days_logged,
             "areas": {
                 key: self.entity_for_area(key).to_json_dict()
                 for key in ("aquarium", "bonsai", "farm", "livestock")
@@ -118,6 +156,7 @@ class Homestead:
 
     def refresh_offline_ticks(self):
         """Credit score for offline time while primary care was still valid."""
+        self.note_login_day()
         now = int(time.time())
         bonus = round(0.2 * (self.generation - 1), 1)
         for entity in self.all_entities():
@@ -169,6 +208,12 @@ class Homestead:
         entity = self.entity_for_area(area)
         if not entity or entity.dead:
             return False
+        if area == "farm" and hasattr(entity, "try_harvest"):
+            if entity.try_harvest():
+                self.generation += 1
+                entity.generation = self.generation
+                return True
+            return False
         if entity.stage < len(entity.stage_list) - 1:
             return False
         if data_manager is not None:
@@ -195,3 +240,6 @@ class Homestead:
         if not entity or entity.dead:
             return False
         return entity.stage >= len(entity.stage_list) - 1
+    def grant_farm_compost(self, amount=1):
+        if hasattr(self.farm, "compost"):
+            self.farm.compost += amount
