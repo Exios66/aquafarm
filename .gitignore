@@ -1,4 +1,7 @@
 __pycache__/
+*.egg-info/
+dist/
+build/
 *.py[cod]
 *.dat
 *.temp
