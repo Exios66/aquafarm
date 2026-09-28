@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.dat
+*.temp
+.Python
+.env
+.venv/
+venv/
+sqlite/*.sqlite
+homestead_board.json
