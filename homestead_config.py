@@ -47,6 +47,7 @@ HOMESTEAD_BACKDROPS = [
 
 FISH_COLOR_VARIANTS = ["classic", "golden", "shadow", "speckled"]
 
+# Short flavor lines for fish profile wizard
 FISH_FLAVOR = {
     "goldfish": "round and cheerful pond classic",
     "betta": "flowing fins, fierce sparkle",
@@ -59,6 +60,7 @@ FISH_FLAVOR = {
     "axolotl": "smiling amphibian pal (fish tank honorary)",
 }
 
+# Four-phase week-cycle seasons (advance on harvest or every N login days)
 SEASONS = [
     {"id": "spring", "label": "Spring", "growth": 1.15},
     {"id": "summer", "label": "Summer", "growth": 1.25},
