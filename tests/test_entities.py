@@ -33,10 +33,13 @@ class EntityPersistenceTest(unittest.TestCase):
         hs = Homestead()
         slot = hs.farm.slots[0]
         slot.planted = True
+        slot.species = 0
         slot.stage = len(hs.farm.stage_list) - 1
         gen_before = hs.generation
         self.assertTrue(hs.harvest_entity("farm"))
-        self.assertEqual(hs.generation, gen_before + 1)
+        # crop harvests fill the basket; generations come from retiring friends
+        self.assertEqual(hs.generation, gen_before)
+        self.assertGreater(hs.progress.inventory.get("carrot", 0), 0)
         self.assertFalse(slot.planted)
 
     def test_farm_rotation_bonus(self):
@@ -91,7 +94,14 @@ class EntityPersistenceTest(unittest.TestCase):
         horse.perform_care("groom")
         self.assertGreater(horse.ride_training(), 0)
 
-        llama = LivestockPen(species=3)
+        sheep = LivestockPen(species=3)
+        sheep.stage = 2
+        sheep.perform_care("feed")
+        self.assertGreater(sheep.shear_wool(), 0)
+        self.assertEqual(sheep.shear_wool(), 0, "shearing has a cooldown")
+
+        llama = LivestockPen(species=5)
+        self.assertEqual(llama.species_name(), "llama")
         llama.stage = 2
         llama.perform_care("feed")
         self.assertGreater(llama.shear_wool(), 0)
@@ -130,6 +140,9 @@ class EntityPersistenceTest(unittest.TestCase):
         fish.tank_health = 90
         fish.algae_level = 0
         self.assertTrue(fish.breed_spawn())
+        self.assertEqual(fish.stage, 0)
+        # score survives the reset, but growth must start over
+        fish.tick_life(0.0, dt=10)
         self.assertEqual(fish.stage, 0)
 
 

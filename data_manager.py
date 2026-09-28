@@ -4,6 +4,7 @@ import json
 import os
 import pickle
 import sqlite3
+import threading
 import time
 
 from homestead import Homestead
@@ -64,21 +65,32 @@ class DataManager:
             homestead = pickle.load(handle)
         homestead.migrate_properties()
         self.process_guest_care(homestead)
+        was_dead = {key: homestead.entity_for_area(key).dead for key in homestead.area_keys()}
         homestead.refresh_offline_ticks()
+        for key in homestead.area_keys():
+            entity = homestead.entity_for_area(key)
+            if entity.dead and not was_dead[key]:
+                homestead.notices.append(f"While you were away, your {key} friend passed on...")
+                self.record_entity_harvest(homestead, key, entity)
         homestead._sync_death_tracking()
         return homestead
 
     def save_homestead(self, homestead):
-        now = int(time.time())
-        for entity in homestead.all_entities():
-            entity.last_time = now
-        homestead._life_thread = None
-        temp_path = self.savefile_path + ".temp"
+        with homestead.lock:
+            now = int(time.time())
+            for entity in homestead.all_entities():
+                entity.last_time = now
+            payload = pickle.dumps(homestead, protocol=2)
+        temp_path = f"{self.savefile_path}.{threading.get_ident()}.temp"
         with open(temp_path, "wb") as handle:
-            pickle.dump(homestead, handle, protocol=2)
-        os.rename(temp_path, self.savefile_path)
+            handle.write(payload)
+        os.replace(temp_path, self.savefile_path)
 
     def write_json_exports(self, homestead):
+        with homestead.lock:
+            self._write_json_exports(homestead)
+
+    def _write_json_exports(self, homestead):
         summary = {
             "owner": self.this_user,
             "generation": homestead.generation,
@@ -102,6 +114,8 @@ class DataManager:
         summary["stage"] = showcase.stage_list[showcase.stage]
         summary["species"] = showcase.species_list[showcase.species]
         summary["score"] = homestead.total_score()
+        summary["coins"] = homestead.progress.coins
+        summary["achievements"] = len(homestead.progress.achievements)
         summary_path = os.path.join(
             self.aquafarm_dir, f"{self.this_user}_homestead.json"
         )

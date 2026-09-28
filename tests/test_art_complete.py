@@ -5,7 +5,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, ROOT)
 
-from entities import BonsaiTree, FarmPlot, FishTank, LivestockPen
+from entities import BonsaiTree, CropSlot, FarmField, FishTank, LivestockPen
 
 
 class AllArtPresentTest(unittest.TestCase):
@@ -22,9 +22,20 @@ class AllArtPresentTest(unittest.TestCase):
         return missing
 
     def test_all_domain_art(self):
-        for entity in (FishTank(), FarmPlot(), LivestockPen(), BonsaiTree()):
+        for entity in (FishTank(), LivestockPen(), BonsaiTree()):
             missing = self._missing_for(entity)
             self.assertEqual(missing, [], msg=f"missing art: {missing[:5]}")
+
+    def test_all_crop_art(self):
+        art_dir = os.path.join(ROOT, "art")
+        missing = []
+        for name in FarmField.species_list:
+            for stage in range(len(CropSlot.stage_list)):
+                slot = CropSlot(species=0, stage=stage, planted=True)
+                path = os.path.join(art_dir, slot.art_basename("farm", name) + ".txt")
+                if not os.path.isfile(path):
+                    missing.append(path)
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":
