@@ -1,6 +1,7 @@
 import time
 
 from entities.care_entity import CareEntity, CARE_WINDOW_SEC
+from homestead_config import FISH_FLAVOR
 
 
 class FishTank(CareEntity):
@@ -43,6 +44,11 @@ class FishTank(CareEntity):
             self.bred_from_adult = False
         if not hasattr(self, "_last_algae_tick"):
             self._last_algae_tick = int(time.time())
+        self.species = max(0, min(self.species, len(self.species_list) - 1))
+
+    @classmethod
+    def fish_flavor(cls, species_name):
+        return FISH_FLAVOR.get(species_name, "a beloved tank friend")
 
     def tank_summary(self):
         feed_pct = self._care_pct("feed")
@@ -117,12 +123,14 @@ class FishTank(CareEntity):
 
     def to_json_dict(self):
         data = super().to_json_dict()
+        sp = self.species_list[self.species]
         data.update(
             {
                 "tank_health": self.tank_health,
                 "algae_level": int(self.algae_level),
                 "bred_from_adult": self.bred_from_adult,
                 "growth_multiplier": round(self.growth_multiplier(), 2),
+                "flavor": self.fish_flavor(sp),
             }
         )
         return data

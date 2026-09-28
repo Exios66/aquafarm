@@ -30,9 +30,21 @@ Use a terminal around **80×24** (or larger). Navigate with number keys or `j`/`
 | Farm plot | **water** crops | harvest when mature (new generation) |
 | Livestock barn | **feed** animals | collect eggs/milk/wool (chicken, cow, **horse**, sheep, pig) |
 
-If primary care lapses for **five days**, that creature, crop, or tree may die (same spirit as Botany’s drought). While care is fresh, your homestead earns **ticks** (score); **generations** give a small growth bonus after harvest cycles.
+If primary care lapses for **five days**, that creature, crop, or tree may die (same spirit as Botany's drought). While care is fresh, your homestead earns **ticks** (score); **generations** give a small growth bonus after harvest cycles.
 
-### Aquarium extras
+### Aquarium — fish species (9)
+
+| Species | Notes |
+|---------|--------|
+| goldfish | round pond classic |
+| betta | flowing fins |
+| neon tetra | tiny shimmer |
+| clownfish | reef stripes |
+| angelfish | tall fins |
+| koi | pond jewel |
+| guppy | peppy tail |
+| catfish | whiskers |
+| axolotl | honorary tank pal |
 
 - **Tank health** blends feed, clean, and water care; **algae** rises when the tank is not cleaned (growth slows slightly, never harsh).
 - **Spawn cycle**: adult fish with a healthy tank can restart the egg → adult lifecycle for bonus ticks.
@@ -50,7 +62,7 @@ From **environment & themes**, cycle **tank themes** (freshwater, planted, coral
 - Personal data: `~/.aquafarm/` (`*_homestead.dat` pickle + per-area JSON exports + `*_homestead_full.json`)
 - Shared board: `sqlite/homestead_board.sqlite` + `homestead_board.json` (multiplayer-style summary rows)
 
-On first run from a checkout, the game creates the `sqlite/` directory and sets permissive permissions like Botany’s garden DB (for shared hosts).
+On first run from a checkout, the game creates the `sqlite/` directory and sets permissive permissions like Botany's garden DB (for shared hosts).
 
 ## Difference from Botany
 
