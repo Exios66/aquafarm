@@ -5,7 +5,17 @@ from entities.care_entity import CareEntity, CARE_WINDOW_SEC
 
 class FishTank(CareEntity):
     domain = "aquarium"
-    species_list = ["goldfish", "betta", "neon tetra", "guppy", "koi"]
+    species_list = [
+        "goldfish",
+        "betta",
+        "neon tetra",
+        "guppy",
+        "koi",
+        "clownfish",
+        "angelfish",
+        "catfish",
+        "axolotl",
+    ]
     stage_list = ["egg", "fry", "juvenile", "adult"]
     primary_care = "feed"
     extra_care_verbs = ["clean", "check_water"]

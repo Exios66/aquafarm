@@ -3,7 +3,7 @@ from entities.care_entity import CareEntity
 
 class LivestockPen(CareEntity):
     domain = "livestock"
-    species_list = ["chicken", "cow", "horse", "sheep", "pig"]
+    species_list = ["chicken", "cow", "horse", "sheep", "pig", "llama"]
     stage_list = ["baby", "young", "grown"]
     primary_care = "feed"
     extra_care_verbs = ["collect"]
@@ -19,6 +19,7 @@ class LivestockPen(CareEntity):
         "horse": 18,
         "sheep": 15,
         "pig": 16,
+        "llama": 17,
     }
 
     def __init__(self, generation=1, species=None):

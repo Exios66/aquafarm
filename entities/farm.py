@@ -3,7 +3,7 @@ from entities.care_entity import CareEntity
 
 class FarmPlot(CareEntity):
     domain = "farm"
-    species_list = ["carrot", "wheat", "tomato", "sunflower"]
+    species_list = ["carrot", "wheat", "tomato", "sunflower", "corn", "pumpkin"]
     stage_list = ["seed", "sprout", "growing", "harvest"]
     primary_care = "water"
     extra_care_verbs = ["harvest"]
@@ -26,3 +26,17 @@ class FarmPlot(CareEntity):
             return False
         self.perform_care("harvest")
         return True
+
+
+# Multi-plot farm wrapper (main catalog); single-plot saves still use FarmPlot.
+class FarmField:
+    """Container for one or more plots — currently a thin alias for FarmPlot."""
+
+    Plot = FarmPlot
+
+    def __init__(self, generation=1):
+        self.plots = [FarmPlot(generation=generation)]
+
+    @property
+    def primary_plot(self):
+        return self.plots[0]
