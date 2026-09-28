@@ -1,4 +1,7 @@
+import time
+
 from entities.care_entity import CareEntity
+from homestead_config import LIVESTOCK_PRODUCE
 
 
 class LivestockPen(CareEntity):
@@ -6,21 +9,12 @@ class LivestockPen(CareEntity):
     species_list = ["chicken", "cow", "horse", "sheep", "pig", "llama"]
     stage_list = ["baby", "young", "grown"]
     primary_care = "feed"
-    extra_care_verbs = ["collect", "groom", "ride", "shear"]
+    extra_care_verbs = ["collect", "groom", "ride", "shear", "forage"]
 
     life_stages = (
         3600 * 24,
         3600 * 24 * 4,
     )
-
-    PRODUCE_BONUS = {
-        "chicken": 12,
-        "cow": 20,
-        "horse": 18,
-        "sheep": 15,
-        "pig": 16,
-        "llama": 17,
-    }
 
     def __init__(self, generation=1, species=None):
         super().__init__(generation=generation, species=species)
@@ -33,116 +27,107 @@ class LivestockPen(CareEntity):
             self.produce_collected = 0
         if not hasattr(self, "training_sessions"):
             self.training_sessions = 0
-        self.species = max(0, min(self.species, len(self.species_list) - 1))
 
-    def species_name(self):
-        return self.species_list[self.species]
+    # -- produce ------------------------------------------------------------
+
+    def produce_info(self):
+        return LIVESTOCK_PRODUCE[self.species_name()]
 
     def primary_care_for_species(self):
-        return self.PRIMARY_BY_SPECIES.get(self.species_name(), "feed")
+        return self.primary_care
 
-    def primary_care_fresh(self):
-        verb = self.primary_care_for_species()
-        delta = int(__import__("time").time()) - self.last_care(verb)
-        from entities.care_entity import CARE_WINDOW_SEC
+    def growth_rate(self):
+        # a groomed animal is a happy animal
+        return 1.1 if self.care_fresh("groom") else 1.0
 
-        return delta <= CARE_WINDOW_SEC
+    def produce_cooldown_left(self):
+        info = self.produce_info()
+        return max(0, info["cooldown_h"] * 3600 - self.seconds_since(info["verb"]))
 
-    def dead_check(self):
+    def produce_blocker(self):
+        """Why produce can't be gathered right now, or None if it can."""
+        info = self.produce_info()
         if self.dead:
-            return True
-        from entities.care_entity import NEGLECT_DEATH_SEC
+            return "gone to rest"
+        if self.stage < len(self.stage_list) - 1:
+            return f"{self.species_name()} must be grown first"
+        if not self.care_fresh(info["needs"]):
+            return f"{info['needs']} your {self.species_name()} first"
+        left = self.produce_cooldown_left()
+        if left > 0:
+            hours, rem = divmod(left, 3600)
+            return f"ready again in {hours}h{rem // 60:02d}m"
+        return None
 
-        verb = self.primary_care_for_species()
-        delta = int(__import__("time").time()) - self.last_care(verb)
-        if delta > NEGLECT_DEATH_SEC:
-            self.dead = True
-        return self.dead
-
-    def tick_life(self, generation_bonus):
+    def produce_status_short(self):
+        info = self.produce_info()
         if self.dead:
-            return
-        if self.primary_care_fresh():
-            score_inc = 1 * (1 + generation_bonus)
-            self.ticks += score_inc
-            if self.stage < len(self.stage_list) - 1:
-                threshold = self.life_stages[min(self.stage, len(self.life_stages) - 1)]
-                if self.ticks >= threshold:
-                    self.growth()
-        self.dead_check()
+            return "-"
+        if self.stage < len(self.stage_list) - 1:
+            return "when grown"
+        if not self.care_fresh(info["needs"]):
+            return f"needs {info['needs']}"
+        left = self.produce_cooldown_left()
+        if left > 0:
+            return f"in {left // 3600}h{left % 3600 // 60:02d}m"
+        return "ready!"
 
-    def perform_care(self, verb):
-        if self.dead:
-            return
-        allowed = [self.primary_care_for_species(), "feed", "groom"] + self.extra_care_verbs
-        if verb not in allowed:
-            return
-        self.care_timestamps[verb] = int(__import__("time").time())
+    def can_produce(self):
+        return self.produce_blocker() is None
+
+    def gather_produce(self):
+        """Species action (eggs, milk, wool, ride...). Returns (item, qty, bonus) or None."""
+        if not self.can_produce():
+            return None
+        info = self.produce_info()
+        bonus = info["bonus"] * (1 + 0.2 * (self.generation - 1))
+        self.ticks += bonus
+        self.produce_collected += 1
+        if info["verb"] == "ride":
+            self.training_sessions += 1
+        self.care_timestamps[info["verb"]] = int(time.time())
+        return info["item"], info["qty"], int(bonus)
+
+    # Species-specific wrappers kept for older callers and tests.
+    def _gather_if(self, verbs):
+        if self.produce_info()["verb"] not in verbs:
+            return 0
+        result = self.gather_produce()
+        return result[2] if result else 0
 
     def can_collect(self):
-        if self.dead or self.stage < len(self.stage_list) - 1:
-            return False
-        name = self.species_name()
-        if name not in ("chicken", "cow"):
-            return False
-        return self.primary_care_fresh()
+        return self.produce_info()["verb"] == "collect" and self.can_produce()
 
     def collect_produce(self):
-        if not self.can_collect():
-            return 0
-        species = self.species_name()
-        bonus = self.PRODUCE_BONUS.get(species, 10)
-        bonus *= 1 + 0.2 * (self.generation - 1)
-        self.ticks += bonus
-        self.produce_collected += 1
-        self.perform_care("collect")
-        return int(bonus)
+        return self._gather_if(("collect",))
 
     def can_shear(self):
-        if self.dead or self.species_name() != "llama":
-            return False
-        if self.stage < len(self.stage_list) - 1:
-            return False
-        return self.primary_care_fresh()
+        return self.produce_info()["verb"] == "shear" and self.can_produce()
 
     def shear_wool(self):
-        if not self.can_shear():
-            return 0
-        bonus = self.PRODUCE_BONUS["llama"] * (1 + 0.2 * (self.generation - 1))
-        self.ticks += bonus
-        self.produce_collected += 1
-        self.compost_grant = getattr(self, "compost_grant", 0)
-        self.perform_care("shear")
-        return int(bonus)
+        return self._gather_if(("shear",))
 
     def can_ride(self):
-        if self.dead or self.species_name() != "horse":
-            return False
-        if self.stage < len(self.stage_list) - 1:
-            return False
-        return self.care_fresh("groom") or self.care_fresh("feed")
+        return self.produce_info()["verb"] == "ride" and self.can_produce()
 
     def ride_training(self):
-        if not self.can_ride():
-            return 0
-        bonus = self.PRODUCE_BONUS["horse"] * (1 + 0.2 * (self.generation - 1))
-        self.ticks += bonus
-        self.training_sessions += 1
-        self.perform_care("ride")
-        return int(bonus)
+        return self._gather_if(("ride",))
+
+    # -- presentation -------------------------------------------------------
 
     def parse_description(self):
         base = super().parse_description()
         name = self.species_name()
+        if self.dead:
+            return base
         if name == "horse":
             return base + " | groom daily"
-        if name == "llama":
-            return base + " | shear when grown"
         return base
 
     def to_json_dict(self):
         data = super().to_json_dict()
         data["produce_collected"] = self.produce_collected
         data["training_sessions"] = self.training_sessions
-        data["primary_care_verb"] = self.primary_care_for_species()
+        data["primary_care_verb"] = self.primary_care
+        data["produce_item"] = self.produce_info()["item"]
         return data
