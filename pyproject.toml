@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aquafarm"
+version = "1.0.0"
+description = "Botany-inspired terminal homestead: aquarium, bonsai, retro farm, and livestock."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Aquafarm contributors" }]
+keywords = ["tui", "curses", "game", "botany", "homestead"]
+classifiers = [
+    "Environment :: Console :: Curses",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+
+[project.scripts]
+aquafarm = "aquafarm:main"
+
+[tool.setuptools]
+py-modules = [
+    "aquafarm",
+    "homestead",
+    "homestead_config",
+    "menu_screen",
+    "data_manager",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["entities*"]
+
+[tool.setuptools.data-files]
+"share/aquafarm-art" = ["art/*.txt"]

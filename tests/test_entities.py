@@ -32,6 +32,21 @@ class EntityPersistenceTest(unittest.TestCase):
         self.assertEqual(hs.farm.stage, 0)
         self.assertGreater(hs.generation, 1)
 
+    def test_horse_species_art_basename(self):
+        from entities.livestock import LivestockPen
+
+        pen = LivestockPen(species=2)
+        self.assertEqual(pen.species_list[pen.species], "horse")
+        self.assertEqual(pen.art_basename(), "livestock_horse_baby")
+
+    def test_guest_timestamps_apply(self):
+        from homestead import Homestead
+
+        hs = Homestead()
+        now = int(__import__("time").time())
+        hs.apply_guest_timestamps([now - 100])
+        self.assertTrue(hs.aquarium.primary_care_fresh())
+
     def test_livestock_collect(self):
         from entities.livestock import LivestockPen
 

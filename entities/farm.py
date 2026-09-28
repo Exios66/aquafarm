@@ -3,7 +3,7 @@ from entities.care_entity import CareEntity
 
 class FarmPlot(CareEntity):
     domain = "farm"
-    species_list = ["carrot", "wheat"]
+    species_list = ["carrot", "wheat", "tomato", "sunflower"]
     stage_list = ["seed", "sprout", "growing", "harvest"]
     primary_care = "water"
     extra_care_verbs = ["harvest"]

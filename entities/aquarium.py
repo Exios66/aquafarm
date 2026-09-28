@@ -5,7 +5,7 @@ from entities.care_entity import CareEntity, CARE_WINDOW_SEC
 
 class FishTank(CareEntity):
     domain = "aquarium"
-    species_list = ["goldfish", "betta", "neon tetra"]
+    species_list = ["goldfish", "betta", "neon tetra", "guppy", "koi"]
     stage_list = ["egg", "fry", "juvenile", "adult"]
     primary_care = "feed"
     extra_care_verbs = ["clean", "check_water"]
@@ -104,13 +104,6 @@ class FishTank(CareEntity):
         self.ticks += bonus
         self.algae_level = min(100, self.algae_level + 5)
         return True
-
-    def apply_customization(self, species_index, display_name=None, color_variant=None):
-        self.species = max(0, min(int(species_index), len(self.species_list) - 1))
-        if display_name is not None:
-            self.display_name = str(display_name)[:32]
-        if color_variant is not None:
-            self.color_variant = str(color_variant)
 
     def to_json_dict(self):
         data = super().to_json_dict()
