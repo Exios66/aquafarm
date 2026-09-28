@@ -111,6 +111,16 @@ class CareEntity:
                     self.growth()
         self.dead_check()
 
+    def entity_age_seconds(self):
+        return max(0, int(time.time()) - self.start_time)
+
+    def apply_customization(self, species_index, display_name=None, color_variant=None):
+        self.species = max(0, min(int(species_index), len(self.species_list) - 1))
+        if display_name is not None:
+            self.display_name = str(display_name)[:32]
+        if color_variant is not None:
+            self.color_variant = str(color_variant)
+
     def to_json_dict(self):
         return {
             "domain": self.domain,
@@ -124,4 +134,5 @@ class CareEntity:
             "display_name": self.display_name,
             "color_variant": self.color_variant,
             "last_primary_care": self.last_care(self.primary_care),
+            "age_seconds": self.entity_age_seconds(),
         }

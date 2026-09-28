@@ -1,10 +1,19 @@
 import curses
+import getpass
+import json
+import math
 import os
+import sys
 import threading
 import time
 
-from entities.aquarium import FishTank
-from homestead_config import FISH_COLOR_VARIANTS, HOMESTEAD_BACKDROPS, TANK_THEMES
+from homestead_config import (
+    FARM_CROP_VARIANTS,
+    FISH_COLOR_VARIANTS,
+    HOMESTEAD_BACKDROPS,
+    LIVESTOCK_COLOR_VARIANTS,
+    TANK_THEMES,
+)
 
 
 class HomesteadMenu:
@@ -14,6 +23,7 @@ class HomesteadMenu:
         self.data = data_manager
         self.exit = False
         self.rendered_art = None
+        self.visited_entity = None
         self.screen_lock = threading.RLock()
         try:
             curses.curs_set(0)
@@ -62,12 +72,23 @@ class HomesteadMenu:
             self.accent,
         )
         entity = self._focused_entity()
+        if self.visited_entity:
+            entity = self.visited_entity
         self.screen.addstr(
             2,
             2,
             f"gen {self.homestead.generation} | score {self.homestead.total_score()}",
             curses.A_DIM,
         )
+        if entity and not entity.dead and self.homestead.active_area not in (
+            "homestead",
+            "environment",
+            "board",
+            "visit",
+            "harvest_log",
+        ):
+            gauge = self._care_gauge(entity)
+            self.screen.addstr(3, 14, gauge[: max(0, self.maxx - 16)], curses.A_NORMAL)
         self._draw_art(entity)
         if self.homestead.active_area == "homestead":
             self._draw_main_menu()
@@ -75,6 +96,8 @@ class HomesteadMenu:
             self._draw_environment_menu()
         elif self.homestead.active_area == "board":
             self._draw_board()
+        elif self.homestead.active_area == "harvest_log":
+            self._draw_harvest_log()
         else:
             self._draw_area_menu()
 
@@ -92,6 +115,8 @@ class HomesteadMenu:
             "livestock barn",
             "environment & themes",
             "homestead board",
+            "visit a friend",
+            "harvest history",
             "instructions",
             "exit",
         ]
@@ -127,8 +152,6 @@ class HomesteadMenu:
                 "look",
                 "back",
             ]
-        elif area == "bonsai":
-            options = ["water", "prune", "look", "back"]
         elif area == "farm":
             options = [
                 "select plot slot (1-3)",
@@ -169,11 +192,31 @@ class HomesteadMenu:
             self.screen.addstr(y, 4, "(empty — be the first caretaker!)")
             y += 1
         else:
-            for _, row in list(board.items())[:6]:
-                line = f"{row['owner']}: score {row['total_score']} gen {row['generation']}"
+            for _, row in list(board.items())[:8]:
+                if row.get("dead"):
+                    continue
+                age = row.get("age") or "?"
+                line = (
+                    f"{row['owner']}: {row['total_score']}p gen {row['generation']} age {age}"
+                )
                 self.screen.addstr(y, 4, line[: max(0, self.maxx - 6)])
                 y += 1
-        self._draw_options(["refresh", "back"], max(y + 1, 9), "shared board")
+        self._draw_options(["refresh", "back"], max(y + 1, 9), "shared board · q back")
+
+    def _draw_harvest_log(self):
+        self.screen.addstr(4, 2, "harvest history", curses.A_BOLD)
+        y = 6
+        if not os.path.isfile(self.data.harvest_json_path):
+            self.screen.addstr(y, 4, "(no harvests recorded yet)")
+            y += 1
+        else:
+            with open(self.data.harvest_json_path, "r") as handle:
+                harvest = json.load(handle)
+            for entry in list(harvest.values())[-8:]:
+                line = f"{entry.get('area')}: {entry.get('description')} ({entry.get('score')}p)"
+                self.screen.addstr(y, 4, line[: max(0, self.maxx - 6)])
+                y += 1
+        self._draw_options(["back"], max(y + 1, 9), "past harvests")
 
     def _draw_options(self, options, start_y, subtitle):
         self.screen.addstr(start_y, 2, subtitle[: max(0, self.maxx - 4)], curses.A_BOLD)
@@ -191,8 +234,14 @@ class HomesteadMenu:
             self.rendered_art = basename
         self._ascii_render(basename, 0, xpos, entity)
 
+    def _art_directory(self):
+        local = os.path.join(os.path.dirname(os.path.realpath(__file__)), "art")
+        if os.path.isdir(local):
+            return local
+        return os.path.join(sys.prefix, "share", "aquafarm-art")
+
     def _ascii_render(self, basename, ypos, xpos, entity=None):
-        art_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "art")
+        art_dir = self._art_directory()
         path = os.path.join(art_dir, basename + ".txt")
         if not os.path.isfile(path):
             fallback = os.path.join(art_dir, "homestead_idle.txt")
@@ -272,6 +321,8 @@ class HomesteadMenu:
                 "livestock barn",
                 "environment & themes",
                 "homestead board",
+                "visit a friend",
+                "harvest history",
                 "instructions",
                 "exit",
             ]
@@ -279,6 +330,10 @@ class HomesteadMenu:
             return ["cycle tank theme", "cycle homestead backdrop", "back"]
         if self.homestead.active_area == "board":
             return ["refresh", "back"]
+        if self.homestead.active_area == "visit":
+            return ["back"]
+        if self.homestead.active_area == "harvest_log":
+            return ["back"]
         if self.homestead.active_area == "aquarium":
             return [
                 "feed",
@@ -290,6 +345,8 @@ class HomesteadMenu:
                 "back",
             ]
         if self.homestead.active_area == "bonsai":
+            if self.homestead.is_mature("bonsai"):
+                return ["water", "prune", "harvest bonsai (new gen)", "look", "back"]
             return ["water", "prune", "look", "back"]
         if self.homestead.active_area == "farm":
             return [
@@ -336,6 +393,10 @@ class HomesteadMenu:
                 self.homestead.active_area = "environment"
             elif choice == "homestead board":
                 self.homestead.active_area = "board"
+            elif choice == "visit a friend":
+                self._visit_friend()
+            elif choice == "harvest history":
+                self._show_harvest_history()
             elif choice == "instructions":
                 self._show_instructions()
             elif choice == "exit":
@@ -372,6 +433,18 @@ class HomesteadMenu:
             return
         if choice == "fish profile" and area == "aquarium":
             self._fish_setup_wizard()
+            return
+        if choice == "barn profile" and area == "livestock":
+            self._barn_setup_wizard()
+            return
+        if choice == "crop profile" and area == "farm":
+            self._crop_setup_wizard()
+            return
+        if choice == "harvest bonsai (new gen)" and area == "bonsai":
+            if self._confirm_harvest("bonsai"):
+                self.homestead.harvest_entity("bonsai", self.data)
+                self._flash_message("Bonsai harvested — new seed awaits.")
+                self._persist()
             return
         if choice == "spawn cycle (breed)" and area == "aquarium":
             if entity.breed_spawn():
@@ -481,6 +554,105 @@ class HomesteadMenu:
         self.screen.refresh()
         time.sleep(0.8)
 
+    def _care_gauge(self, entity):
+        left_pct = max(
+            0.0,
+            1.0 - ((time.time() - entity.last_care(entity.primary_care)) / 86400),
+        )
+        filled = int(math.ceil(left_pct * 10))
+        return (
+            f"({')' * filled}{'.' * (10 - filled)}) {int(left_pct * 100)}% care"
+        )
+
+    def _confirm_harvest(self, area):
+        entity = self.homestead.entity_for_area(area)
+        if not entity or not self.homestead.is_mature(area):
+            return False
+        bonus = round(0.2 * (self.homestead.generation - 1), 1)
+        self.screen.erase()
+        lines = [
+            f"Ready to harvest your {area} friend?",
+            f"Next generation grows at ~{1 + bonus:.1f}x speed.",
+            "Continue? (Y/n)",
+        ]
+        for y, line in enumerate(lines, 2):
+            self.screen.addstr(y, 2, line[: max(0, self.maxx - 4)])
+        self.screen.refresh()
+        key = self.screen.getch()
+        return key in (ord("Y"), ord("y"), 10, 13)
+
+    def _get_user_string(self, ypos=15, xpos=2):
+        user_string = ""
+        while True:
+            key = self.screen.getch()
+            if key in (curses.KEY_ENTER, 10, 13):
+                return user_string.strip()
+            if key in (27, ord("q")):
+                return ""
+            if key in (curses.KEY_BACKSPACE, 127, 8):
+                user_string = user_string[:-1]
+            elif 32 <= key <= 126 and len(user_string) < 24:
+                user_string += chr(key)
+            self.screen.addstr(ypos, xpos, " " * (self.maxx - xpos - 1))
+            self.screen.addstr(ypos, xpos, user_string[: max(0, self.maxx - xpos - 1)])
+            self.screen.refresh()
+
+    def _visit_friend(self):
+        self.screen.erase()
+        self.screen.addstr(2, 2, "Whose homestead would you like to visit?", curses.A_BOLD)
+        if self.homestead.visitors:
+            recent = ", ".join(self.homestead.visitors[-5:])
+            self.screen.addstr(4, 2, f"Since last time: {recent[: self.maxx - 4]}")
+            self.homestead.visitors = []
+        weekly = self.data.weekly_visitors_text(getpass.getuser())
+        self.screen.addstr(6, 2, f"This week: {weekly[: self.maxx - 4]}")
+        self.screen.addstr(8, 2, "username:")
+        host = self._get_user_string(8, 12)
+        if not host:
+            return
+        if host.lower() == getpass.getuser().lower():
+            self._flash_message("You're already home on the farm!")
+            return
+        json_path = self.data.guest_homestead_json_path(host)
+        description = ""
+        if json_path:
+            with open(json_path, "r") as handle:
+                visitor_data = json.load(handle)
+            description = visitor_data.get("description", "")
+            self.visited_entity = self._entity_from_visit_json(visitor_data)
+        ok, status = self.data.append_guest_care_for_host(host)
+        if ok:
+            msg = f"...you helped tend ~{host}'s {description}..."
+        elif status == "locked":
+            msg = f"{host}'s homestead is locked, but you peeked in..."
+        else:
+            msg = f"Can't find directions to {host}'s homestead..."
+        self._flash_message(msg)
+        self.visited_entity = None
+
+    def _entity_from_visit_json(self, data):
+        from entities.aquarium import FishTank
+
+        entity = FishTank()
+        entity.dead = bool(data.get("is_dead"))
+        if entity.dead:
+            return entity
+        areas = data.get("areas") or {}
+        fish = areas.get("aquarium") or data
+        stage = fish.get("stage")
+        species = fish.get("species")
+        if stage in entity.stage_list:
+            entity.stage = entity.stage_list.index(stage)
+        if species in entity.species_list:
+            entity.species = entity.species_list.index(species)
+        entity.display_name = fish.get("display_name", "")
+        entity.color_variant = fish.get("color_variant", "classic")
+        return entity
+
+    def _show_harvest_history(self):
+        self.homestead.active_area = "harvest_log"
+        self.selected = 0
+
     def _fish_setup_wizard(self):
         fish = self.homestead.aquarium
         species_idx = fish.species
@@ -535,6 +707,104 @@ class HomesteadMenu:
                     name_buf.pop()
             elif 32 <= key <= 126 and len(name_buf) < 24:
                 name_buf.append(chr(key))
+
+    def _barn_setup_wizard(self):
+        pen = self.homestead.livestock
+        species_idx = pen.species
+        variant_idx = 0
+        if pen.color_variant in LIVESTOCK_COLOR_VARIANTS:
+            variant_idx = LIVESTOCK_COLOR_VARIANTS.index(pen.color_variant)
+        name_buf = list(pen.display_name or "")
+
+        while True:
+            self.screen.erase()
+            self.screen.addstr(2, 2, "Barn profile — pick your farm friend", curses.A_BOLD)
+            sp = pen.species_list[species_idx]
+            var = LIVESTOCK_COLOR_VARIANTS[variant_idx]
+            self.screen.addstr(4, 4, f"species [{species_idx + 1}/{len(pen.species_list)}]: {sp}")
+            self.screen.addstr(5, 4, f"coat: {var}")
+            self.screen.addstr(6, 4, f"name: {''.join(name_buf) or '(none)'}")
+            self.screen.addstr(
+                8,
+                4,
+                "←/→ species  ↑/↓ coat  type name  Enter save  q cancel",
+                curses.A_DIM,
+            )
+            pen.species = species_idx
+            pen.color_variant = var
+            self._ascii_render(pen.art_basename(), 0, min(40, self.maxx - 22), pen)
+            self.screen.refresh()
+            key = self.screen.getch()
+            if key in (curses.KEY_LEFT, ord("h")):
+                species_idx = (species_idx - 1) % len(pen.species_list)
+            elif key in (curses.KEY_RIGHT, ord("l")):
+                species_idx = (species_idx + 1) % len(pen.species_list)
+            elif key in (curses.KEY_UP, ord("k")):
+                variant_idx = (variant_idx - 1) % len(LIVESTOCK_COLOR_VARIANTS)
+            elif key in (curses.KEY_DOWN, ord("j")):
+                variant_idx = (variant_idx + 1) % len(LIVESTOCK_COLOR_VARIANTS)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                pen.apply_customization(
+                    species_idx,
+                    display_name="".join(name_buf).strip(),
+                    color_variant=LIVESTOCK_COLOR_VARIANTS[variant_idx],
+                )
+                self.homestead.pending_barn_setup = False
+                self._persist()
+                return
+            elif key in (ord("q"), ord("Q"), 27):
+                self.homestead.pending_barn_setup = False
+                return
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                if name_buf:
+                    name_buf.pop()
+            elif 32 <= key <= 126 and len(name_buf) < 24:
+                name_buf.append(chr(key))
+
+    def _crop_setup_wizard(self):
+        plot = self.homestead.farm
+        species_idx = plot.species
+        variant_idx = 0
+        if plot.color_variant in FARM_CROP_VARIANTS:
+            variant_idx = FARM_CROP_VARIANTS.index(plot.color_variant)
+
+        while True:
+            self.screen.erase()
+            self.screen.addstr(2, 2, "Crop profile — choose seeds", curses.A_BOLD)
+            sp = plot.species_list[species_idx]
+            var = FARM_CROP_VARIANTS[variant_idx]
+            self.screen.addstr(4, 4, f"crop [{species_idx + 1}/{len(plot.species_list)}]: {sp}")
+            self.screen.addstr(5, 4, f"variant: {var}")
+            self.screen.addstr(
+                7,
+                4,
+                "←/→ crop  ↑/↓ variant  Enter plant  q cancel",
+                curses.A_DIM,
+            )
+            plot.species = species_idx
+            plot.color_variant = var
+            self._ascii_render(plot.art_basename(), 0, min(40, self.maxx - 22), plot)
+            self.screen.refresh()
+            key = self.screen.getch()
+            if key in (curses.KEY_LEFT, ord("h")):
+                species_idx = (species_idx - 1) % len(plot.species_list)
+            elif key in (curses.KEY_RIGHT, ord("l")):
+                species_idx = (species_idx + 1) % len(plot.species_list)
+            elif key in (curses.KEY_UP, ord("k")):
+                variant_idx = (variant_idx - 1) % len(FARM_CROP_VARIANTS)
+            elif key in (curses.KEY_DOWN, ord("j")):
+                variant_idx = (variant_idx + 1) % len(FARM_CROP_VARIANTS)
+            elif key in (curses.KEY_ENTER, 10, 13):
+                plot.apply_customization(
+                    species_idx,
+                    color_variant=FARM_CROP_VARIANTS[variant_idx],
+                )
+                self.homestead.pending_crop_setup = False
+                self._persist()
+                return
+            elif key in (ord("q"), ord("Q"), 27):
+                self.homestead.pending_crop_setup = False
+                return
 
     def _show_instructions(self):
         self.screen.erase()

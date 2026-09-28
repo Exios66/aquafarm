@@ -21,6 +21,7 @@ def main():
         homestead = data.load_homestead()
     else:
         homestead = Homestead()
+        homestead._sync_death_tracking()
         data.write_json_exports(homestead)
     homestead.start_life(data)
     ms.main(homestead, data)

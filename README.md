@@ -7,8 +7,16 @@ This package lives beside [Botany](https://github.com/jifunks/botany) as its own
 ## Quick start
 
 ```bash
+git clone https://github.com/Exios66/aquafarm.git
 cd aquafarm
 python3 aquafarm.py
+```
+
+Install as a command (optional):
+
+```bash
+pip install -e .
+aquafarm
 ```
 
 Use a terminal around **80×24** (or larger). Navigate with number keys or `j`/`k`, confirm with Enter, go back with `q`.
@@ -18,9 +26,9 @@ Use a terminal around **80×24** (or larger). Navigate with number keys or `j`/`
 | Area | Primary care (24h) | Extra actions |
 |------|-------------------|---------------|
 | Aquarium | **feed** fish | clean tank, check water, spawn cycle (breed), fish profile |
-| Bonsai grove | **water** | prune |
-| Farm plot | **water** crops | 3 plots, plant, fertilize (compost), harvest slots |
-| Livestock barn | **feed** or **groom** (horse) | collect, ride, shear, cycle animal type |
+| Bonsai grove | **water** | prune; harvest mature bonsai (maple, pine, juniper, **cherry**) |
+| Farm plot | **water** crops | harvest when mature (new generation) |
+| Livestock barn | **feed** animals | collect eggs/milk/wool (chicken, cow, **horse**, sheep, pig) |
 
 If primary care lapses for **five days**, that creature, crop, or tree may die (same spirit as Botany's drought). While care is fresh, your homestead earns **ticks** (score); **generations** give a small growth bonus after harvest cycles.
 
@@ -40,35 +48,14 @@ If primary care lapses for **five days**, that creature, crop, or tree may die (
 
 - **Tank health** blends feed, clean, and water care; **algae** rises when the tank is not cleaned (growth slows slightly, never harsh).
 - **Spawn cycle**: adult fish with a healthy tank can restart the egg → adult lifecycle for bonus ticks.
-- **Fish profile**: pick any species, optional name, and color variant (classic, golden, shadow, speckled).
-
-### Farm — crops (6) & seasons
-
-| Crop | Stages |
-|------|--------|
-| carrot, wheat, tomato, corn, pumpkin, sunflower | seed → sprout → growing → harvest |
-
-- **Three field plots** run at once; choose active slot in the farm menu.
-- **Soil quality** (0–100): watering helps; harvest and neglect lower it; **fertilize** spends compost.
-- **Season cycle** (Spring / Summer / Autumn / Winter): advances when you harvest or every 3 login days. Growth multipliers: **1.15 / 1.25 / 1.0 / 0.85** respectively.
-- **Crop rotation**: plant a different species in a slot after harvest for a small growth head-start.
-- **Compost**: every 3 harvests in a streak, or livestock collect/shear.
-- **Farm journal** line in the menu shows last action, soil %, and season.
-
-### Livestock (4 types)
-
-| Animal | Primary care | Bonus action |
-|--------|--------------|--------------|
-| chicken | feed | collect eggs |
-| cow | feed | collect milk |
-| horse | groom | ride / training |
-| llama | feed | shear wool (+ compost) |
-
-Cycle animal type from the barn menu. Collect, ride, and shear grant bonus ticks when the animal is **grown** and care is fresh.
+- **Fish profile**: goldfish, betta, neon tetra, **guppy**, **koi** — optional name and color variant (classic, golden, shadow, speckled).
+- **Barn & crop profiles**: choose livestock breeds and farm crops (carrot, wheat, **tomato**, **sunflower**) with coat/crop variants.
+- **Visit a friend**: Botany-style guest care via shared `~/.aquafarm/visitors.json` on multi-user hosts.
+- **Harvest history**: local log when a friend passes on or you start a new generation.
 
 ### Environment
 
-From **environment & themes**, cycle **tank themes** (freshwater, planted, coral reef, moonlit pond) and **homestead backdrops** (meadow, mountain, coastal). These change the header frame and subtitle text.
+From **environment & themes**, cycle **tank themes** (freshwater, planted, coral reef, moonlit pond) and **homestead backdrops** (meadow, mountain, coastal, **retro pixel farm**). These change the header frame and subtitle text.
 
 ## Saves and sharing
 

@@ -43,7 +43,15 @@ HOMESTEAD_BACKDROPS = [
         "label": "coastal homestead",
         "banner": "salt & wind",
     },
+    {
+        "id": "retro_farm",
+        "label": "retro pixel farm",
+        "banner": "barn · fence · hay",
+    },
 ]
+
+LIVESTOCK_COLOR_VARIANTS = ["classic", "spotted", "midnight", "cream"]
+FARM_CROP_VARIANTS = ["classic", "heirloom", "golden", "striped"]
 
 FISH_COLOR_VARIANTS = ["classic", "golden", "shadow", "speckled"]
 

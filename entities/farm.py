@@ -4,8 +4,12 @@ from entities.care_entity import CareEntity
 from homestead_config import SEASONS
 
 
-class CropSlot:
-    """One of three simultaneous field plots."""
+class FarmPlot(CareEntity):
+    domain = "farm"
+    species_list = ["carrot", "wheat", "tomato", "sunflower", "corn", "pumpkin"]
+    stage_list = ["seed", "sprout", "growing", "harvest"]
+    primary_care = "water"
+    extra_care_verbs = ["harvest"]
 
     stage_list = ["seed", "sprout", "growing", "harvest"]
     life_stages = (
@@ -207,76 +211,16 @@ class FarmField(CareEntity):
         self.ticks += bonus
         return True
 
-    def is_mature(self):
-        return self._slot().is_mature()
 
-    def tick_life(self, generation_bonus):
-        if self.dead:
-            return
-        neglected = not self.primary_care_fresh()
-        if neglected:
-            self.soil_quality = max(0, self.soil_quality - 0.02)
-        if self.primary_care_fresh():
-            score_inc = 0.3 * (1 + generation_bonus)
-            self.ticks += score_inc
-            mult = self.season_growth_mult() * self.soil_growth_mult()
-            for slot in self.slots:
-                if slot.planted:
-                    slot.growth_step(mult * (1 + generation_bonus * 0.1))
-        self.dead_check()
+# Multi-plot farm wrapper (main catalog); single-plot saves still use FarmPlot.
+class FarmField:
+    """Container for one or more plots — currently a thin alias for FarmPlot."""
 
-    def journal_line(self):
-        season = self.season()["label"]
-        return (
-            f"journal: {self.last_action} | soil {int(self.soil_quality)}%"
-            f" | {season} | compost {self.compost}"
-        )
+    Plot = FarmPlot
 
-    def parse_description(self):
-        if self.dead:
-            return "rest in peace, field"
-        slot = self._slot()
-        if slot.is_empty():
-            sp = "(empty plot)"
-        else:
-            sp = self.species_list[slot.species]
-        stage = self.stage_list[slot.stage] if slot.planted else "fallow"
-        return f"slot {self.active_slot + 1}: {stage} {sp}"
+    def __init__(self, generation=1):
+        self.plots = [FarmPlot(generation=generation)]
 
-    def art_basename(self):
-        if self.dead:
-            return "rip"
-        slot = self._slot()
-        if slot.is_empty():
-            return "homestead_idle"
-        name = self.species_list[slot.species]
-        return slot.art_basename(self.domain, name)
-
-    def to_json_dict(self):
-        data = super().to_json_dict()
-        data.update(
-            {
-                "soil_quality": int(self.soil_quality),
-                "season": self.season()["id"],
-                "season_phase": self.season_phase,
-                "compost": self.compost,
-                "harvest_streak": self.harvest_streak,
-                "active_slot": self.active_slot,
-                "last_action": self.last_action,
-                "journal": self.journal_line(),
-                "slots": [
-                    {
-                        "species": self.species_list[s.species] if s.planted else None,
-                        "stage": self.stage_list[s.stage] if s.planted else "empty",
-                        "ticks": int(s.ticks),
-                        "planted": s.planted,
-                    }
-                    for s in self.slots
-                ],
-            }
-        )
-        return data
-
-
-# Backward-compatible alias
-FarmPlot = FarmField
+    @property
+    def primary_plot(self):
+        return self.plots[0]
